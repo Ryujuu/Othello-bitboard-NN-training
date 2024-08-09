@@ -9,9 +9,7 @@ namespace Othello_bitboard_NN_training
 
     public class Bot
     {
-        private int _searchTime = 100; // Time limit in milliseconds
-        private DateTime _startTime;
-        private bool _timeExceeded;
+        private int _fixedDepth = 6;
         private NeuralNetwork _nn;
         private BoardFeatures _boardFeatures;
 
@@ -30,46 +28,19 @@ namespace Othello_bitboard_NN_training
 
         public Move GetMove(Board board, Player currentPlayer)
         {
-            _startTime = DateTime.Now;
-            _timeExceeded = false;
+            Move bestMove;
 
-            Move bestMove = null;
-            int currentDepth = 1;
-            int maxDepth = 64 - board.CountBits(board.BlackBoard | board.WhiteBoard);
-
-            while (!_timeExceeded && (currentDepth <= maxDepth))
-            {
-                try
-                {
-                    bestMove = Search(board.Clone(), currentDepth, currentPlayer, double.MinValue, double.MaxValue);
-                }
-                catch (TimeoutException)
-                {
-                    _timeExceeded = true;
-                }
-
-                currentDepth++;
-            }
-
+            bestMove = Search(board.Clone(), _fixedDepth, currentPlayer, double.MinValue, double.MaxValue);
+            
             return bestMove;
         }
 
         private Move Search(Board board, int depth, Player currentPlayer, double alpha, double beta)
         {
-            if (depth == 0 || board.IsGameOver() || _timeExceeded)
+            if (depth == 0 || board.IsGameOver())
             {
-                if (_timeExceeded)
-                {
-                    throw new TimeoutException();
-                }
                 double evaluation = EvaluateBoard(board, currentPlayer);
                 return new Move(-1, evaluation, depth);
-            }
-
-            if ((DateTime.Now - _startTime).TotalMilliseconds >= _searchTime)
-            {
-                _timeExceeded = true;
-                throw new TimeoutException();
             }
 
             ulong validMoves = board.GenerateValidMoves(currentPlayer.IsBlack);
@@ -146,7 +117,6 @@ namespace Othello_bitboard_NN_training
                         board.MakeMove(move.Position, isBlack);
                     }
                 }
-
                 // Switch players
                 isBlack = !isBlack;
             }
