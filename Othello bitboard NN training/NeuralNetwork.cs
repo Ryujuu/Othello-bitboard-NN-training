@@ -12,7 +12,7 @@ namespace Othello_bitboard_NN_training
         public int InputSize { get; private set; }
         public int HiddenSize { get; private set; }
         public int OutputSize { get; private set; }
-        private Random random;
+        private readonly Random random;
 
         public double[] InputWeights { get; private set; }
         public double[] HiddenWeights { get; private set; }

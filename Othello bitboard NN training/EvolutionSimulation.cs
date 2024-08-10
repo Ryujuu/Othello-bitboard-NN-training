@@ -12,10 +12,10 @@ namespace Othello_bitboard_NN_training
         public void Run()
         {
             int inputSize = 8; // Number of features
-            int hiddenSize = 10; // Size of the hidden layer
+            int hiddenSize = 16; // Size of the hidden layer
             int outputSize = 1; // Single output for evaluation score
 
-            int populationSize = 20;
+            int populationSize = 50;
             double mutationRate = 0.01;
             double crossoverRate = 0.7;
             int generations = 100;
@@ -36,24 +36,32 @@ namespace Othello_bitboard_NN_training
                 }
                 else
                 {
-                    bot.Name = $"Gen1_Bot{i}";
+                    bot.Name = $"Gen1_Bot{i + 1}";
                 }
-
                 population.Add(bot);
             }
 
             GeneticAlgorithm ga = new GeneticAlgorithm(populationSize, mutationRate, crossoverRate, gamesPerPair);
+            BenchmarkBot benchmarkBot = new BenchmarkBot();
 
             for (int gen = 1; gen <= generations; gen++)
             {
                 List<Tuple<Bot, double>> evaluatedPopulation = ga.EvaluatePopulation(population, gen);
                 ga.DisplayBotsWithWinRates(evaluatedPopulation, gen);
-                population = ga.Evolve(evaluatedPopulation, gen);
-                Console.WriteLine($"\nGeneration {gen} evolved.\n");
+
+                // Sort the evaluated population by fitness (descending order)
+                evaluatedPopulation = evaluatedPopulation.OrderByDescending(tuple => tuple.Item2).ToList();
+
+                // Select the best bot (the one with the highest fitness)
+                Bot bestBot = evaluatedPopulation.First().Item1;
 
                 // Save the best bot's neural network weights
-                Bot bestBot = population.First(); // Assuming the first one is the best after sorting by fitness
                 bestBot.GetNeuralNetwork().SaveWeights($"best_bot_weights.csv");
+                // Test the best bot against the benchmark bot
+                ga.TestBestBotAgainstBenchmark(bestBot, benchmarkBot);
+
+                population = ga.Evolve(evaluatedPopulation, gen);
+                Console.WriteLine($"\nGeneration {gen} evolved.\n");
             }
         }
     }

@@ -9,28 +9,32 @@ namespace Othello_bitboard_NN_training
 
     public class Bot
     {
-        private int _fixedDepth = 6;
-        private NeuralNetwork _nn;
-        private BoardFeatures _boardFeatures;
+        private int FixedDepth = 6;
+        private NeuralNetwork NN;
+        private BoardFeatures BoardFeatures;
 
         public string Name { get; set; }
         public string Parents { get; set; }
+
+        public int Rating { get; set; }
         public Bot(NeuralNetwork nn)
         {
-            _nn = nn;
-            _boardFeatures = new BoardFeatures();
+            NN = nn;
+            BoardFeatures = new BoardFeatures();
+            Rating = 1000;
+            Parents = "";
         }
 
         public NeuralNetwork GetNeuralNetwork()
         {
-            return _nn;
+            return NN;
         }
 
         public Move GetMove(Board board, Player currentPlayer)
         {
             Move bestMove;
 
-            bestMove = Search(board.Clone(), _fixedDepth, currentPlayer, double.MinValue, double.MaxValue);
+            bestMove = Search(board.Clone(), FixedDepth, currentPlayer, double.MinValue, double.MaxValue);
             
             return bestMove;
         }
@@ -92,8 +96,8 @@ namespace Othello_bitboard_NN_training
 
         private double EvaluateBoard(Board board, Player currentPlayer)
         {
-            var features = _boardFeatures.GetBoardFeatures(board, currentPlayer.IsBlack).ToArray();
-            return _nn.Evaluate(features);
+            var features = BoardFeatures.GetBoardFeatures(board, currentPlayer.IsBlack).ToArray();
+            return NN.Evaluate(features);
         }
 
         public int PlayGameAgainst(Bot opponent)

@@ -27,17 +27,20 @@ namespace Othello_bitboard_NN_training
             this.gamesPerPair = gamesPerPair;
         }
 
-        public List<Bot> Evolve(List<Tuple<Bot, double>> population, int generation)
+        public List<Bot> Evolve(List<Tuple<Bot, double>> evaluatedPopulation, int generation)
         {
-            // Select the top 30% as parents
-            List<Bot> parents = SelectParents(population);
+            // Sort the population by fitness (descending order)
+            var sortedPopulation = evaluatedPopulation.OrderByDescending(tuple => tuple.Item2).ToList();
 
-            // Generate new population through crossover and mutation
-            List<Bot> newPopulation = new List<Bot>();
+            // Select the top 30% to carry over
+            int topCount = (int)(populationSize * 0.3);
+            List<Bot> newPopulation = sortedPopulation.Take(topCount).Select(tuple => tuple.Item1).ToList();
+
+            // Fill the rest of the population with offspring generated through crossover and mutation
             while (newPopulation.Count < populationSize)
             {
-                Bot parent1 = parents[random.Next(parents.Count)];
-                Bot parent2 = parents[random.Next(parents.Count)];
+                Bot parent1 = newPopulation[random.Next(topCount)];
+                Bot parent2 = newPopulation[random.Next(topCount)];
 
                 NeuralNetwork childNN = Crossover(parent1.GetNeuralNetwork(), parent2.GetNeuralNetwork());
                 Mutate(childNN);
@@ -45,7 +48,7 @@ namespace Othello_bitboard_NN_training
                 // Create the new bot with the correct naming
                 Bot childBot = new Bot(childNN)
                 {
-                    Name = $"Gen{generation}_Bot{newPopulation.Count}",
+                    Name = $"Gen{generation + 1}_Bot{newPopulation.Count + 1}",
                     Parents = $"{parent1.Name} / {parent2.Name}"
                 };
 
@@ -82,40 +85,10 @@ namespace Othello_bitboard_NN_training
 
                     for (int k = 0; k < gamesPerPair; k++)
                     {
-                        // Clone bots to ensure independent game state
-                        var bot1Clone = new Bot(bot1.GetNeuralNetwork().Clone());
-                        var bot2Clone = new Bot(bot2.GetNeuralNetwork().Clone());
+                        // Play the game and update win counts and ratings
+                        SimulateGame(bot1, bot2, concurrentWinCounts);
+                        SimulateGame(bot2, bot1, concurrentWinCounts);
 
-                        int result = bot1Clone.PlayGameAgainst(bot2Clone);
-                        if (result == 1)
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot1, 1, (key, oldValue) => oldValue + 1);
-                        }
-                        else if (result == -1)
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot2, 1, (key, oldValue) => oldValue + 1);
-                        }
-                        else
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot1, 0.5, (key, oldValue) => oldValue + 0.5);
-                            concurrentWinCounts.AddOrUpdate(bot2, 0.5, (key, oldValue) => oldValue + 0.5);
-                        }
-
-                        // Play the game in the opposite direction
-                        result = bot2Clone.PlayGameAgainst(bot1Clone);
-                        if (result == -1)
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot1, 1, (key, oldValue) => oldValue + 1);
-                        }
-                        else if (result == 1)
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot2, 1, (key, oldValue) => oldValue + 1);
-                        }
-                        else
-                        {
-                            concurrentWinCounts.AddOrUpdate(bot1, 0.5, (key, oldValue) => oldValue + 0.5);
-                            concurrentWinCounts.AddOrUpdate(bot2, 0.5, (key, oldValue) => oldValue + 0.5);
-                        }
                         gamesPlayed += 2;
 
                         lock (progressLock)
@@ -136,6 +109,30 @@ namespace Othello_bitboard_NN_training
             return evaluatedPopulation;
         }
 
+        private void SimulateGame(Bot bot1, Bot bot2, ConcurrentDictionary<Bot, double> concurrentWinCounts)
+        {
+            // Clone bots to ensure independent game state
+            Bot bot1Clone = new(bot1.GetNeuralNetwork().Clone());
+            Bot bot2Clone = new(bot2.GetNeuralNetwork().Clone());
+
+            int result = bot1Clone.PlayGameAgainst(bot2Clone);
+            AdjustRatings(bot1, bot2, result);
+
+            if (result == 1)
+            {
+                concurrentWinCounts.AddOrUpdate(bot1, 1, (key, oldValue) => oldValue + 1);
+            }
+            else if (result == -1)
+            {
+                concurrentWinCounts.AddOrUpdate(bot2, 1, (key, oldValue) => oldValue + 1);
+            }
+            else
+            {
+                concurrentWinCounts.AddOrUpdate(bot1, 0.5, (key, oldValue) => oldValue + 0.5);
+                concurrentWinCounts.AddOrUpdate(bot2, 0.5, (key, oldValue) => oldValue + 0.5);
+            }
+        }
+
         public void UpdateProgress(int gamesPlayed, int totalNumberOfGames, int generation)
         {
             double progress = (double)gamesPlayed / totalNumberOfGames;
@@ -152,24 +149,41 @@ namespace Othello_bitboard_NN_training
             // Display each bot with its win rate
             foreach (var botTuple in sortedPopulation)
             {
-                if (gen > 1)
+                if (botTuple.Item1.Parents != "")
                 {
-                    Console.WriteLine($"{botTuple.Item1.Name} from {botTuple.Item1.Parents}, Win Rate: {botTuple.Item2:F2}");
+                    Console.WriteLine($"{botTuple.Item1.Name}, Win Rate: {botTuple.Item2:F2}, Rating: {botTuple.Item1.Rating}, Parents: {botTuple.Item1.Parents}");
                 }
                 else
                 {
-                    Console.WriteLine($"{botTuple.Item1.Name}, Win Rate: {botTuple.Item2:F2}");
+                    Console.WriteLine($"{botTuple.Item1.Name}, Win Rate: {botTuple.Item2:F2}, Rating: {botTuple.Item1.Rating}");
                 }
             }
         }
 
-        private List<Bot> SelectParents(List<Tuple<Bot, double>> evaluatedPopulation)
+        public void TestBestBotAgainstBenchmark(Bot bestBot, BenchmarkBot benchmarkBot)
         {
-            return evaluatedPopulation
-                .OrderByDescending(tuple => tuple.Item2)
-                .Take((int)(populationSize * 0.3))
-                .Select(tuple => tuple.Item1)
-                .ToList();
+            int bestBotWins = 0;
+            int benchmarkBotWins = 0;
+            int draws = 0;
+
+            int numberOfGames = 25; // Play multiple games to get a reliable result
+
+            for (int i = 0; i < numberOfGames; i++)
+            {
+                // Best bot plays black
+                int result = benchmarkBot.PlayGame(bestBot, true);
+                if (result == 1) bestBotWins++;
+                else if (result == -1) benchmarkBotWins++;
+                else draws++;
+
+                // Best bot plays white
+                result = benchmarkBot.PlayGame(bestBot, false);
+                if (result == -1) bestBotWins++;
+                else if (result == 1) benchmarkBotWins++;
+                else draws++;
+            }
+
+            Console.WriteLine($"\n{bestBot.Name} vs. Benchmark: {bestBotWins} Wins, {benchmarkBotWins} Losses, {draws} Draws");
         }
 
         private NeuralNetwork Crossover(NeuralNetwork parent1, NeuralNetwork parent2)
@@ -206,6 +220,44 @@ namespace Othello_bitboard_NN_training
                     nn.HiddenWeights[i] += (random.NextDouble() * 2 - 1) * 0.1; // Mutate by a small random value
                 }
             }
+        }
+
+        public void AdjustRatings(Bot bot1, Bot bot2, int result)
+        {
+            // Determine the K-factor for each bot
+            int K = 32;
+
+            // Calculate the expected score for each bot
+            double expectedScore1 = CalculateExpectedScore(bot1.Rating, bot2.Rating);
+            double expectedScore2 = CalculateExpectedScore(bot2.Rating, bot1.Rating);
+
+            // Determine the actual score based on the result
+            double actualScore1, actualScore2;
+
+            if (result == 1) // bot1 wins
+            {
+                actualScore1 = 1.0;
+                actualScore2 = 0.0;
+            }
+            else if (result == -1) // bot2 wins
+            {
+                actualScore1 = 0.0;
+                actualScore2 = 1.0;
+            }
+            else // draw
+            {
+                actualScore1 = 0.5;
+                actualScore2 = 0.5;
+            }
+
+            // Adjust the ratings
+            bot1.Rating = (int)Math.Round(bot1.Rating + K * (actualScore1 - expectedScore1));
+            bot2.Rating = (int)Math.Round(bot2.Rating + K * (actualScore2 - expectedScore2));
+        }
+
+        private double CalculateExpectedScore(int rating1, int rating2)
+        {
+            return 1.0 / (1.0 + Math.Pow(10, (rating2 - rating1) / 400.0));
         }
     }
 }
