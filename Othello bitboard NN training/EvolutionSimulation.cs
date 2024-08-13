@@ -15,11 +15,14 @@ namespace Othello_bitboard_NN_training
             int hiddenSize = 16; // Size of the hidden layer
             int outputSize = 1; // Single output for evaluation score
 
-            int populationSize = 50;
-            double mutationRate = 0.01;
-            double crossoverRate = 0.7;
+            int populationSize = 40;
+            double mutationRate = 0.05;
+            double crossoverRate = 0.8;
             int generations = 100;
             int gamesPerPair = 1; // Number of games played as black and white to simulate per pair of neural networks
+
+            // Save the filepath for the previously best neural network
+            string weightsGenBestFilePath = "best_bot_weights.csv";
 
             List<Bot> population = new List<Bot>();
             for (int i = 0; i < populationSize; i++)
@@ -28,10 +31,9 @@ namespace Othello_bitboard_NN_training
                 Bot bot = new Bot(nn);
 
                 // Check if weights file exists and load weights
-                string weightsFilePath = "best_bot_weights.csv";
-                if (File.Exists(weightsFilePath) && i == 0) // Load weights into the first bot if the file exists
+                if (File.Exists(weightsGenBestFilePath) && i == 0) // Load weights into the first bot if the file exists
                 {
-                    nn.LoadWeights(weightsFilePath);
+                    nn.LoadWeights(weightsGenBestFilePath);
                     bot.Name = "Gen1_Loaded";
                 }
                 else
@@ -46,23 +48,24 @@ namespace Othello_bitboard_NN_training
 
             for (int gen = 1; gen <= generations; gen++)
             {
-                List<Tuple<Bot, double>> evaluatedPopulation = ga.EvaluatePopulation(population, gen);
+                List<Bot> evaluatedPopulation = ga.EvaluatePopulation(population, gen);
                 ga.DisplayBotsWithWinRates(evaluatedPopulation, gen);
 
                 // Sort the evaluated population by fitness (descending order)
-                evaluatedPopulation = evaluatedPopulation.OrderByDescending(tuple => tuple.Item2).ToList();
+                evaluatedPopulation = evaluatedPopulation.OrderByDescending(bot => bot.WinRate).ToList();
 
                 // Select the best bot (the one with the highest fitness)
-                Bot bestBot = evaluatedPopulation.First().Item1;
+                Bot bestBot = evaluatedPopulation.First();
 
                 // Save the best bot's neural network weights
-                bestBot.GetNeuralNetwork().SaveWeights($"best_bot_weights.csv");
+                bestBot.GetNeuralNetwork().SaveWeights(weightsGenBestFilePath);
                 // Test the best bot against the benchmark bot
                 ga.TestBestBotAgainstBenchmark(bestBot, benchmarkBot);
 
                 population = ga.Evolve(evaluatedPopulation, gen);
                 Console.WriteLine($"\nGeneration {gen} evolved.\n");
             }
+
         }
     }
 }

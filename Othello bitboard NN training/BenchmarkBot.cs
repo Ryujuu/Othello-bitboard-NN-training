@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Othello_bitboard_NN_training
 {
-    public class BenchmarkBot
+    public class BenchmarkBot // Change out this benchmark bot to the best bot from the last training session or something
     {
         private int DepthLimit;
         public int Rating { get; set; }
@@ -20,9 +20,9 @@ namespace Othello_bitboard_NN_training
         public Move GetMove(Board board, Player currentPlayer)
         {
             Move bestMove;
-            
+
             bestMove = Search(board.Clone(), DepthLimit, currentPlayer, double.MinValue, double.MaxValue);
-            
+
 
             return bestMove;
         }
@@ -82,36 +82,31 @@ namespace Othello_bitboard_NN_training
             return new Move(bestMove, bestScore, depth);
         }
 
-        public int PlayGame(Bot bot1, bool isBlack)
+        public int PlayGame(Bot bot1, bool isBot1Black)
         {
-            Board board = new Board();
-            Player currentPlayer = new Player(true, true); // Set initial player based on the isBlack parameter
+            Board board = new();
+
+            // Determine who should start first
+            Player currentPlayer = new(isBot1Black, isBot1Black);
+            Player opponentPlayer = currentPlayer.GetOpponent();
+            bool isBlack = true;
 
             while (!board.IsGameOver())
             {
                 Move move;
-                bool hasValidMoves = board.GenerateValidMoves(currentPlayer.IsBlack) != 0;
 
-                if (hasValidMoves)
+                if (currentPlayer.IsBlack == isBlack && board.GenerateValidMoves(currentPlayer.IsBlack) != 0)
                 {
-                    // Determine which bot should make the move based on the `isBlack` flag and current player
-                    if (currentPlayer.IsBlack == isBlack)
-                    {
-                        move = bot1.GetMove(board, currentPlayer); // bot1 makes the move
-                    }
-                    else
-                    {
-                        move = GetMove(board, currentPlayer); // opponent makes the move
-                    }
-
-                    // Make the move if it's valid
-                    if (move.Position != -1)
-                    {
-                        board.MakeMove(move.Position, currentPlayer.IsBlack);
-                    }
+                    move = bot1.GetMove(board, currentPlayer);
+                    board.MakeMove(move.Position, currentPlayer.IsBlack);
+                }
+                else if (board.GenerateValidMoves(opponentPlayer.IsBlack) != 0)
+                {
+                    move = GetMove(board, opponentPlayer);
+                    board.MakeMove(move.Position, opponentPlayer.IsBlack);
                 }
 
-                // Also switch the isBlack flag
+                // Switch players
                 isBlack = !isBlack;
             }
 
@@ -120,11 +115,44 @@ namespace Othello_bitboard_NN_training
 
             // Determine the winner
             if (blackDiscs > whiteDiscs)
-                return isBlack ? -1 : 1; // Bot 2 wins if Bot 1 plays black, otherwise Bot 1 wins
+                return isBot1Black ? -1 : 1; // Bot 2 wins if Bot 1 plays black, otherwise Bot 1 wins
             else if (whiteDiscs > blackDiscs)
-                return isBlack ? 1 : -1; // Bot 1 wins if Bot 1 plays black, otherwise Bot 2 wins
+                return isBot1Black ? 1 : -1; // Bot 1 wins if Bot 1 plays black, otherwise Bot 2 wins
             else
                 return 0; // Draw
+        }
+
+        // Print the current board state
+        // ANSI escape codes for coloring
+        private const string Reset = "\x1b[0m";
+        private const string DarkGreen = "\x1b[48;5;22m"; // Dark green background
+        private const string WhitePiece = "\x1b[97m"; // White text
+        private const string BlackPiece = "\x1b[30m"; // Black text
+        public static void PrintBoard(Board board)
+        {
+            Console.WriteLine("    A   B   C   D   E   F   G   H  ");
+            Console.WriteLine($"  {DarkGreen}+---+---+---+---+---+---+---+---+{Reset}");
+
+            for (int row = 7; row >= 0; row--) // Start from row 7 (8 in display) to row 0 (1 in display)
+            {
+                Console.Write(row + 1 + $" {DarkGreen}|{Reset}");
+                for (int col = 0; col < 8; col++)
+                {
+                    int position = row * 8 + col;
+                    string piece = GetPieceAtPosition(board, position);
+                    Console.Write($"{DarkGreen} {piece} {Reset}{DarkGreen}|{Reset}");
+                }
+                Console.WriteLine(" " + (row + 1));
+                Console.WriteLine($"  {DarkGreen}+---+---+---+---+---+---+---+---+{Reset}");
+            }
+            Console.WriteLine("    A   B   C   D   E   F   G   H  ");
+        }
+
+        private static string GetPieceAtPosition(Board board, int position)
+        {
+            if ((board.BlackBoard & (1UL << position)) != 0) return BlackPiece + "0";
+            if ((board.WhiteBoard & (1UL << position)) != 0) return WhitePiece + "0";
+            return " ";
         }
     }
     public class Evaluation

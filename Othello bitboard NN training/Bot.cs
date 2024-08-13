@@ -9,20 +9,24 @@ namespace Othello_bitboard_NN_training
 
     public class Bot
     {
-        private int FixedDepth = 6;
-        private NeuralNetwork NN;
-        private BoardFeatures BoardFeatures;
+        private readonly int FixedDepth = 6;
+        private readonly NeuralNetwork NN;
+        private readonly BoardFeatures BoardFeatures;
 
         public string Name { get; set; }
         public string Parents { get; set; }
-
+        public double WinRate { get; set; }
         public int Rating { get; set; }
+
+
         public Bot(NeuralNetwork nn)
         {
             NN = nn;
-            BoardFeatures = new BoardFeatures();
-            Rating = 1000;
+            BoardFeatures = new BoardFeatures(); // This could maybe be changed to stop memory allocation
+            Name = "";
             Parents = "";
+            WinRate = 0;
+            Rating = 1000;
         }
 
         public NeuralNetwork GetNeuralNetwork()
